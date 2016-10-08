@@ -9,7 +9,7 @@
  *
  */
 
-THREE.VREffect = function ( renderer, onError ) {
+THREE.VREffect = function ( renderer, presentableElement, onError ) {
 
 	var isWebVR1 = true;
 
@@ -18,6 +18,15 @@ THREE.VREffect = function ( renderer, onError ) {
 	var eyeTranslationR = new THREE.Vector3();
 	var renderRectL, renderRectR;
 	var eyeFOVL, eyeFOVR;
+
+	if (Object.prototype.toString.call(presentableElement) === '[object Function]') {
+		onError = presentableElement;
+		presentableElement = undefined;
+	}
+
+	if (!presentableElement) {
+		presentableElement = renderer.domElement;
+	}
 
 	function gotVRDisplays( displays ) {
 
@@ -112,7 +121,6 @@ THREE.VREffect = function ( renderer, onError ) {
 
 	// fullscreen
 
-	var canvas = renderer.domElement;
 	var requestFullscreen;
 	var exitFullscreen;
 	var fullscreenElement;
@@ -172,14 +180,14 @@ THREE.VREffect = function ( renderer, onError ) {
 
 	}
 
-	if ( canvas.requestFullscreen ) {
+	if ( presentableElement.requestFullscreen ) {
 
 		requestFullscreen = 'requestFullscreen';
 		fullscreenElement = 'fullscreenElement';
 		exitFullscreen = 'exitFullscreen';
 		document.addEventListener( 'fullscreenchange', onFullscreenChange, false );
 
-	} else if ( canvas.mozRequestFullScreen ) {
+	} else if ( presentableElement.mozRequestFullScreen ) {
 
 		requestFullscreen = 'mozRequestFullScreen';
 		fullscreenElement = 'mozFullScreenElement';
@@ -219,7 +227,7 @@ THREE.VREffect = function ( renderer, onError ) {
 
 				if ( boolean ) {
 
-					resolve( vrDisplay.requestPresent( [ { source: canvas } ] ) );
+					resolve( vrDisplay.requestPresent( [ { source: presentableElement } ] ) );
 
 				} else {
 
@@ -229,9 +237,9 @@ THREE.VREffect = function ( renderer, onError ) {
 
 			} else {
 
-				if ( canvas[ requestFullscreen ] ) {
+				if ( presentableElement[ requestFullscreen ] ) {
 
-					canvas[ boolean ? requestFullscreen : exitFullscreen ]( { vrDisplay: vrDisplay } );
+					presentableElement[ boolean ? requestFullscreen : exitFullscreen ]( { vrDisplay: vrDisplay } );
 					resolve();
 
 				} else {

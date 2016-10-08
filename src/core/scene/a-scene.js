@@ -166,7 +166,7 @@ module.exports = registerElement('a-scene', {
           // TODO: 07/16 Chromium builds break when `requestFullscreen`ing on a canvas
           // that we are also `requestPresent`ing. Until then, don't fullscreen if headset
           // connected.
-          if (!self.isMobile && !checkHeadsetConnected()) { requestFullscreen(self.canvas); }
+          if (!self.isMobile && !checkHeadsetConnected()) { requestFullscreen(self.canvas.parentElement); }
           self.resize();
         }
 
@@ -298,7 +298,7 @@ module.exports = registerElement('a-scene', {
         });
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.sortObjects = false;
-        this.effect = new THREE.VREffect(renderer);
+        this.effect = new THREE.VREffect(renderer, canvas.parentElement);
       },
       writable: window.debug
     },

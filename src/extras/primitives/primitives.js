@@ -1,11 +1,11 @@
 var AEntity = require('../../core/a-entity');
+var components = require('../../core/component').components;
 var registerElement = require('../../core/a-register-element').registerElement;
 var utils = require('../../utils/');
 
 var debug = utils.debug;
 var setComponentProperty = utils.entity.setComponentProperty;
 var log = debug('extras:primitives:debug');
-var warn = debug('extras:primitives:warn');
 
 var primitives = module.exports.primitives = {};
 
@@ -15,7 +15,7 @@ module.exports.registerPrimitive = function registerPrimitive (name, definition)
 
   // Deprecation warning for defaultAttributes usage.
   if (definition.defaultAttributes) {
-    warn("The 'defaultAttributes' object is deprecated. Use 'defaultComponents' instead.");
+    console.warn("The 'defaultAttributes' object is deprecated. Use 'defaultComponents' instead.");
   }
 
   var primitive = registerElement(name, {
@@ -26,17 +26,21 @@ module.exports.registerPrimitive = function registerPrimitive (name, definition)
       deprecated: {value: definition.deprecated || null},
       deprecatedMappings: {value: definition.deprecatedMappings || {}},
       mappings: {value: definition.mappings || {}},
+      transforms: {value: definition.transforms || {}},
 
       createdCallback: {
         value: function () {
-          if (definition.deprecated) { console.warn(definition.deprecated); }
+          if (definition.deprecated) {
+            console.warn(definition.deprecated);
+          }
         }
       },
 
-      getExtraComponents: {
+      attachedCallback: {
         value: function () {
           var attr;
-          var data;
+          var Component;
+          var initialComponents;
           var i;
           var mapping;
           var mixins;
@@ -44,36 +48,52 @@ module.exports.registerPrimitive = function registerPrimitive (name, definition)
           var self = this;
 
           // Gather component data from default components.
-          data = utils.clone(this.defaultComponentsFromPrimitive);
+          initialComponents = utils.clone(this.defaultComponentsFromPrimitive);
 
-          // Factor in mixins to overwrite default components.
+          // Gather component data from mixins.
           mixins = this.getAttribute('mixin');
           if (mixins) {
             mixins = mixins.trim().split(' ');
-            mixins.forEach(function applyMixin (mixinId) {
+            mixins.forEach(function (mixinId) {
               var mixinComponents = self.sceneEl.querySelector('#' + mixinId).componentCache;
               Object.keys(mixinComponents).forEach(function setComponent (name) {
-                data[name] = utils.extendDeep(data[name], mixinComponents[name]);
+                initialComponents[name] = utils.extendDeep(
+                  initialComponents[name], mixinComponents[name]);
               });
             });
           }
 
-          // Gather component data from mappings.
           for (i = 0; i < this.attributes.length; i++) {
             attr = this.attributes[i];
+
+            // Gather component data from mappings.
             mapping = this.mappings[attr.name];
             if (mapping) {
               path = utils.entity.getComponentPropertyPath(mapping);
               if (path.constructor === Array) {
-                data[path[0]][path[1]] = attr.value;
+                initialComponents[path[0]][path[1]] = attr.value;
               } else {
-                data[path] = attr.value;
+                initialComponents[path] = attr.value;
               }
               continue;
             }
+
+            // Gather component data from components.
+            if (components[attr.name]) {
+              Component = components[attr.name];
+              if (Component.isSingleProp) {
+                initialComponents[attr.name] = attr.value;
+              } else {
+                initialComponents[attr.name] = utils.extendDeep(
+                  initialComponents[attr.name] || {}, Component.parse(attr.value || {}));
+              }
+            }
           }
 
-          return data;
+          // Set components.
+          Object.keys(initialComponents).forEach(function initComponent (componentName) {
+            self.setAttribute(componentName, initialComponents[componentName]);
+          });
         }
       },
 

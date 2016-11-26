@@ -287,10 +287,12 @@ var proto = Object.create(ANode.prototype, {
 
       if (this.hasLoaded) { return; }
 
-      ANode.prototype.load.call(this, function entityLoadCallback () {
+      ANode.prototype.load.call(this, entityLoadCallback);
+      // Entity load.
+      function entityLoadCallback () {
         self.updateComponents();
         if (self.isScene || self.parentEl.isPlaying) { self.play(); }
-      });
+      }
     },
     writable: window.debug
   },
@@ -339,16 +341,13 @@ var proto = Object.create(ANode.prototype, {
       var componentId = componentInfo[1];
       var componentName = componentInfo[0];
       var isComponentDefined = checkComponentDefined(this, attrName) || data !== undefined;
-
-      // Not a registered component.
-      if (!COMPONENTS[componentName]) { return; }
-
-      // Component is not a dependency and is undefined.
-      // If a component is a dependency, then it is okay to have no data.
-      if (!isComponentDefined && !isDependency) { return; }
-
-      // Component already initialized.
-      if (attrName in this.components) { return; }
+      // Check if component is registered and whether component should be initialized.
+      if (!COMPONENTS[componentName] ||
+          (!isComponentDefined && !isDependency) ||
+          // If component already initialized.
+          (attrName in this.components)) {
+        return;
+      }
 
       // Initialize dependencies first
       this.initComponentDependencies(componentName);
@@ -393,7 +392,6 @@ var proto = Object.create(ANode.prototype, {
 
       // No dependencies.
       dependencies = COMPONENTS[name].dependencies;
-
       if (!dependencies) { return; }
 
       // Initialize dependencies.
@@ -431,59 +429,48 @@ var proto = Object.create(ANode.prototype, {
   },
 
   /**
-   * Initialize or update all components.
-   * Build data using initial components, defined attributes, mixins, and defaults.
+   * Update all components.
+   * Build data using defined attributes, mixins, and defaults.
    * Update default components before the rest.
-   *
-   * @member {function} getExtraComponents - Can be implemented to include component data
-   *   from other sources (e.g., implemented by primitives).
    */
   updateComponents: {
     value: function () {
-      var componentsToUpdate = {};
-      var extraComponents = {};
-      var i;
+      var elComponents = {};
       var self = this;
-
+      var i;
       if (!this.hasLoaded) { return; }
+
+      // Gather entity-defined components.
+      var attributes = this.attributes;
+      for (i = 0; i < attributes.length; ++i) {
+        addComponent(attributes[i].name);
+      }
 
       // Gather mixin-defined components.
       getMixedInComponents(this).forEach(addComponent);
 
-      // Gather from extra initial component data if defined (e.g., primitives).
-      if (this.getExtraComponents) {
-        extraComponents = this.getExtraComponents();
-        Object.keys(extraComponents).forEach(addComponent);
-      }
+      // Set default components.
+      Object.keys(this.defaultComponents).forEach(updateComponent);
 
-      // Gather entity-defined components.
-      for (i = 0; i < this.attributes.length; ++i) {
-        addComponent(this.attributes[i].name);
-      }
-
-      // Initialze or update default components first.
-      Object.keys(this.defaultComponents).forEach(doUpdateComponent);
-
-      // Initialize or update rest of components.
-      Object.keys(componentsToUpdate).forEach(doUpdateComponent);
+      // Set rest of components.
+      Object.keys(elComponents).forEach(updateComponent);
 
       /**
-       * Add component to the list to initialize or update.
+       * Add component to the list.
        */
-      function addComponent (componentName) {
-        var name = componentName.split(MULTIPLE_COMPONENT_DELIMITER)[0];
+      function addComponent (key) {
+        var name = key.split(MULTIPLE_COMPONENT_DELIMITER)[0];
         if (!COMPONENTS[name]) { return; }
-        componentsToUpdate[componentName] = true;
+        elComponents[key] = true;
       }
 
       /**
-       * Get component data and initialize or update component.
+       * Update component with given name.
        */
-      function doUpdateComponent (name) {
-        // Build defined component data.
-        var data = mergeComponentData(self.getDOMAttribute(name), extraComponents[name]);
-        delete componentsToUpdate[name];
-        self.updateComponent(name, data);
+      function updateComponent (name) {
+        var attrValue = self.getDOMAttribute(name);
+        delete elComponents[name];
+        self.updateComponent(name, attrValue);
       }
     }
   },
@@ -869,26 +856,6 @@ function isComponentMixedIn (name, mixinEls) {
     if (inMixin) { break; }
   }
   return inMixin;
-}
-
-/**
- * Given entity defined value, merge in extra data if necessary.
- * Handle both single and multi-property components.
- *
- * @param {string} attrValue - Entity data.
- * @param extraData - Entity data from another source to merge in.
- */
-function mergeComponentData (attrValue, extraData) {
-  // Extra data not defined, just return attrValue.
-  if (!extraData) { return attrValue; }
-
-  // Merge multi-property data.
-  if (extraData.constructor === Object) {
-    return utils.extend(extraData, utils.styleParser.parse(attrValue || {}));
-  }
-
-  // Return data, precendence to the defined value.
-  return attrValue || extraData;
 }
 
 AEntity = registerElement('a-entity', {
